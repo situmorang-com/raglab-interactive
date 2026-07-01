@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Lab Interactive</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <div class="lang-toggle" role="group" aria-label="Language">
+      <button type="button" class="lang-btn active" data-lang="en">EN</button>
+      <button type="button" class="lang-btn" data-lang="id">ID</button>
+    </div>
+    <h1>RAG Lab Interactive</h1>
+    <p class="subtitle" data-i18n="subtitle">Don't just watch RAG happen — change the knobs and see why it matters.</p>
+  </header>
+
+  <main>
+    <section class="panel" id="controls-panel">
+      <h2 data-i18n="controlsTitle">Pipeline controls</h2>
+      <div class="controls-grid">
+        <div class="control">
+          <label for="chunk-size-input">
+            <span data-i18n="chunkSizeLabel">Chunk size (words)</span>
+            <button type="button" class="info-badge pulse" data-tip="chunkSizeTip" data-i18n-attr-aria-label="tooltipAriaLabel" aria-label="What does this do?">?</button>
+          </label>
+          <input type="number" id="chunk-size-input" min="20" max="2000" step="20" value="400">
+        </div>
+        <div class="control">
+          <label for="overlap-input">
+            <span data-i18n="overlapLabel">Overlap (words)</span>
+            <button type="button" class="info-badge pulse" data-tip="overlapTip" data-i18n-attr-aria-label="tooltipAriaLabel" aria-label="What does this do?">?</button>
+          </label>
+          <input type="number" id="overlap-input" min="0" max="500" step="10" value="80">
+        </div>
+        <div class="control">
+          <span class="control-label-row">
+            <span class="control-spacer" aria-hidden="true"></span>
+            <button type="button" class="info-badge pulse" data-tip="rebuildTip" data-i18n-attr-aria-label="tooltipAriaLabel" aria-label="What does this do?">?</button>
+          </span>
+          <button type="button" id="rebuild-button" data-i18n="rebuildButton">Rebuild Index</button>
+        </div>
+        <div class="control">
+          <label for="topk-input">
+            <span data-i18n="topkLabel">Top-K retrieved</span>
+            <button type="button" class="info-badge pulse" data-tip="topkTip" data-i18n-attr-aria-label="tooltipAriaLabel" aria-label="What does this do?">?</button>
+          </label>
+          <input type="number" id="topk-input" min="1" max="10" step="1" value="3">
+        </div>
+        <div class="control">
+          <label for="threshold-input">
+            <span data-i18n="thresholdLabel">Low-confidence threshold</span>
+            <button type="button" class="info-badge pulse" data-tip="thresholdTip" data-i18n-attr-aria-label="tooltipAriaLabel" aria-label="What does this do?">?</button>
+          </label>
+          <input type="number" id="threshold-input" min="0" max="1" step="0.05" value="0.3">
+        </div>
+      </div>
+      <p class="explain" data-i18n-html="controlsExplain">
+        Top-K and the threshold apply on the next question you ask. Chunk size and overlap
+        require <strong>Rebuild Index</strong> — chunking happens when documents are ingested,
+        not per-query, just like in a real RAG system.
+      </p>
+      <div class="controls-grid checkboxes">
+        <label class="checkbox"><input type="checkbox" id="use-rag-checkbox" checked> <span data-i18n="useRagLabel">Use RAG (retrieve context before answering)</span> <button type="button" class="info-badge pulse" data-tip="useRagTip" data-i18n-attr-aria-label="tooltipAriaLabel" aria-label="What does this do?">?</button></label>
+        <label class="checkbox"><input type="checkbox" id="compare-checkbox"> <span data-i18n="compareLabel">Compare with vs without RAG</span> <button type="button" class="info-badge pulse" data-tip="compareTip" data-i18n-attr-aria-label="tooltipAriaLabel" aria-label="What does this do?">?</button></label>
+      </div>
+      <details id="add-doc-details">
+        <summary data-i18n="addDocSummary">Add your own document to the corpus</summary>
+        <div class="add-doc-form">
+          <p class="explain" data-i18n="addDocTip">Paste in your own text and it gets chunked and indexed immediately, so you can test retrieval on something other than the built-in sample documents.</p>
+          <input type="text" id="doc-name-input" data-i18n-placeholder="docNamePlaceholder" placeholder="Document name (optional)">
+          <textarea id="doc-text-input" rows="4" data-i18n-placeholder="docTextPlaceholder" placeholder="Paste some text here, then click Add..."></textarea>
+          <button type="button" id="add-doc-button" data-i18n="addDocButton">Add to corpus</button>
+        </div>
+      </details>
+      <div id="tooltip-popup" class="tooltip-popup" hidden>
+        <p id="tooltip-text"></p>
+      </div>
+    </section>
+
+    <section class="query-box">
+      <form id="query-form">
+        <input type="text" id="query-input" data-i18n-placeholder="queryPlaceholder" placeholder="Ask a question about the sample docs..." autocomplete="off" required>
+        <button type="submit" id="ask-button" data-i18n="askButton">Ask</button>
+      </form>
+      <p class="hint" data-i18n="hint">Try: "What is the company's vacation policy?" or "How do I reset my password?" — or something not in the docs at all.</p>
+    </section>
+
+    <section id="pipeline" class="pipeline" hidden>
+      <div class="stage" id="stage-chunking">
+        <h2><span class="step-num">1</span> <span data-i18n="stage1Title">Chunking</span></h2>
+        <p class="explain">
+          <span data-i18n="chunk_intro">The document corpus was split into overlapping chunks at index time. There are</span>
+          <strong id="chunk-count">0</strong>
+          <span data-i18n="chunk_total_size">chunks total (chunk size</span>
+          <strong id="chunk-size-display">400</strong>
+          <span data-i18n="chunk_overlap_frag">, overlap</span>
+          <strong id="overlap-display">80</strong>
+          <span data-i18n="chunk_end">).</span>
+        </p>
+        <details class="why-box">
+          <summary data-i18n="whyMatters">Why does this matter?</summary>
+          <ul data-i18n-html="stage1WhyList">
+            <li><strong>Why chunk at all:</strong> embedding models and LLM context windows have limits, and retrieval is more precise over short, focused passages than over whole documents — a 5-page policy embedded as one vector blurs together every topic in it.</li>
+            <li><strong>The size tradeoff:</strong> chunks too small lose surrounding context (an answer might need the sentence before or after); chunks too large dilute the embedding's "topic signal," so retrieval gets fuzzier and less precise.</li>
+            <li><strong>Why overlap:</strong> without it, a fact that happens to fall right at a chunk boundary gets split in half and may not be retrievable in full from either piece.</li>
+            <li><strong>No universal right answer</strong> — a good starting point is ~150-400 words for prose, smaller for FAQ-style content, larger when answers need multi-sentence context. Try shrinking the chunk size and rebuilding to feel the tradeoff yourself (see <code>docs/LAB_WORKSHEET.md</code> exercise 4).</li>
+          </ul>
+        </details>
+        <div class="chunk-list" id="all-chunks"></div>
+      </div>
+
+      <div class="stage" id="stage-embedding">
+        <h2><span class="step-num">2</span> <span data-i18n="stage2Title">Embedding Space &amp; Retrieval</span></h2>
+        <p class="explain" data-i18n="stage2Explain">Every chunk is a point in high-dimensional space, projected here to 2D. Your question
+          (★) lands near chunks with similar meaning — those are the ones retrieved (highlighted, ranked below).</p>
+        <details class="why-box">
+          <summary data-i18n="whyMatters">Why does this matter?</summary>
+          <ul data-i18n-html="stage2WhyList">
+            <li><strong>Why embeddings:</strong> comparing raw text only catches keyword overlap — "vacation days" and "PTO accrual" share no words but mean almost the same thing. Embeddings let us compare <em>meaning</em> instead of exact wording.</li>
+            <li><strong>What the score means:</strong> cosine similarity measures the angle between two vectors, not their length — so it's about topical direction, not how much text there is.</li>
+            <li><strong>The Top-K tradeoff:</strong> too few risks missing the chunk that actually has the answer; too many dilutes the prompt with irrelevant text and costs more tokens for no benefit. There's no fixed right number — it depends on how much the corpus overlaps in topic.</li>
+            <li><strong>A weak top score is a real signal:</strong> it usually means retrieval — not the LLM — is the part of the system that's failing. See <code>docs/LAB_WORKSHEET.md</code> exercise 2.</li>
+          </ul>
+        </details>
+        <div class="plot-wrap">
+          <svg id="embedding-plot" viewBox="0 0 420 320"></svg>
+        </div>
+        <div id="query-vector-panel" class="query-vector-panel" hidden>
+          <p class="vector-caption" data-i18n="queryVectorLabel">Your question, as it's actually stored:</p>
+          <div id="query-vector-bars" class="vec-bars"></div>
+          <p class="vector-note" id="query-vector-note"></p>
+        </div>
+        <div id="confidence-banner" class="confidence-banner" hidden></div>
+        <div class="chunk-list" id="retrieved-chunks"></div>
+      </div>
+
+      <div class="stage" id="stage-prompt">
+        <h2><span class="step-num">3</span> <span data-i18n="stage3Title">Augmented Prompt</span></h2>
+        <p class="explain" data-i18n="stage3Explain">This is the literal text sent to Claude when using RAG: the retrieved chunks as context, plus your question.</p>
+        <details class="why-box">
+          <summary data-i18n="whyMatters">Why does this matter?</summary>
+          <ul data-i18n-html="stage3WhyList">
+            <li><strong>The model only knows what's here</strong> (plus whatever it learned during training). If retrieval pulled in the wrong chunks, no amount of clever prompting in step 4 can recover the missing fact — the failure already happened upstream.</li>
+            <li><strong>This is also a trust boundary:</strong> in a real system, anything in retrieved documents is concatenated into the prompt as if it were trusted context. If a document contained adversarial instructions, the model might follow them — this is the basis of "prompt injection" attacks on RAG systems, worth knowing about even though this demo doesn't defend against it.</li>
+            <li><strong>Prompt size is a budget:</strong> every retrieved chunk costs tokens (and money, and latency) — that's part of why Top-K and chunk size aren't "bigger is always better."</li>
+          </ul>
+        </details>
+        <pre id="prompt-text"></pre>
+      </div>
+
+      <div class="stage" id="stage-answer">
+        <h2><span class="step-num">4</span> <span data-i18n="stage4Title">Answer</span></h2>
+        <p class="explain" data-i18n="stage4Explain">Claude's response. In compare mode, the RAG answer (grounded in your docs) sits next to
+          the no-RAG baseline (Claude's general knowledge alone).</p>
+        <details class="why-box">
+          <summary data-i18n="whyMatters">Why does this matter?</summary>
+          <ul data-i18n-html="stage4WhyList">
+            <li><strong>Grounding reduces hallucination, it doesn't eliminate it.</strong> The system prompt explicitly instructs the model to say "I don't know" rather than guess when the context doesn't contain the answer — try comparing this to the no-RAG baseline on a question outside the corpus.</li>
+            <li><strong>A confident-sounding wrong answer is the dangerous failure mode</strong> — not an obvious error. Without retrieval, an LLM will often produce a fluent, plausible, but factually wrong answer about specifics it was never told (see <code>docs/LAB_WORKSHEET.md</code> exercise 3).</li>
+          </ul>
+        </details>
+        <div id="answer-columns" class="answer-columns">
+          <div class="answer-col" id="rag-col" hidden>
+            <h3 data-i18n="withRag">With RAG</h3>
+            <div class="answer" id="rag-answer-text"></div>
+          </div>
+          <div class="answer-col" id="no-rag-col" hidden>
+            <h3 data-i18n="withoutRag">Without RAG</h3>
+            <div class="answer" id="no-rag-answer-text"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="error-box" class="error-box" hidden></div>
+  </main>
+
+  <footer>
+    <p data-i18n-html="footer">Fork this on GitHub and extend it with your AI coding assistant of choice. See <code>docs/EXTENDING.md</code> and <code>docs/LAB_WORKSHEET.md</code> for ideas.</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
