@@ -17,8 +17,18 @@
   </header>
 
   <main>
+    <section class="panel intro-card" id="intro-card">
+      <h2 data-i18n="introTitle">What is RAG?</h2>
+      <p data-i18n="introBody">Retrieval-Augmented Generation (RAG) lets an AI answer questions using your own documents instead of guessing from general training. Below is a real company handbook. Click below to watch one question flow through all four steps -- chunking, embedding, retrieval, and generation -- and see the answer with and without RAG side by side.</p>
+      <button type="button" id="guided-run-button" data-i18n="guidedRunButton">Run the demo →</button>
+    </section>
+
     <section class="panel" id="controls-panel">
-      <h2 data-i18n="controlsTitle">Pipeline controls</h2>
+      <h2>
+        <span data-i18n="controlsTitle">Pipeline controls</span>
+        <button type="button" id="toggle-controls-button" data-i18n="showControlsLabel">▸ Show pipeline controls</button>
+      </h2>
+      <div class="controls-body" id="controls-body" hidden>
       <div class="controls-grid">
         <div class="control">
           <label for="chunk-size-input">
@@ -77,6 +87,7 @@
       <div id="tooltip-popup" class="tooltip-popup" hidden>
         <p id="tooltip-text"></p>
       </div>
+      </div>
     </section>
 
     <section class="query-box">
@@ -85,10 +96,11 @@
         <button type="submit" id="ask-button" data-i18n="askButton">Ask</button>
       </form>
       <p class="hint" data-i18n="hint">Try: "What is the company's vacation policy?" or "How do I reset my password?" — or something not in the docs at all.</p>
+      <button type="button" id="open-config-button" class="link-button" data-i18n="openConfigButton">⚙ Configure API key</button>
     </section>
 
     <section id="pipeline" class="pipeline" hidden>
-      <div class="stage" id="stage-chunking">
+      <div class="stage" id="stage-chunking" hidden>
         <h2><span class="step-num">1</span> <span data-i18n="stage1Title">Chunking</span></h2>
         <p class="explain">
           <span data-i18n="chunk_intro">The document corpus was split into overlapping chunks at index time. There are</span>
@@ -111,7 +123,7 @@
         <div class="chunk-list" id="all-chunks"></div>
       </div>
 
-      <div class="stage" id="stage-embedding">
+      <div class="stage" id="stage-embedding" hidden>
         <h2><span class="step-num">2</span> <span data-i18n="stage2Title">Embedding Space &amp; Retrieval</span></h2>
         <p class="explain" data-i18n="stage2Explain">Every chunk is a point in high-dimensional space, projected here to 2D. Your question
           (★) lands near chunks with similar meaning — those are the ones retrieved (highlighted, ranked below).</p>
@@ -124,19 +136,19 @@
             <li><strong>A weak top score is a real signal:</strong> it usually means retrieval — not the LLM — is the part of the system that's failing. See <code>docs/LAB_WORKSHEET.md</code> exercise 2.</li>
           </ul>
         </details>
-        <div class="plot-wrap">
-          <svg id="embedding-plot" viewBox="0 0 420 320"></svg>
-        </div>
         <div id="query-vector-panel" class="query-vector-panel" hidden>
           <p class="vector-caption" data-i18n="queryVectorLabel">Your question, as it's actually stored:</p>
-          <div id="query-vector-bars" class="vec-bars"></div>
+          <div id="query-vector-bars"></div>
           <p class="vector-note" id="query-vector-note"></p>
+        </div>
+        <div class="plot-wrap">
+          <svg id="embedding-plot" viewBox="0 0 420 320"></svg>
         </div>
         <div id="confidence-banner" class="confidence-banner" hidden></div>
         <div class="chunk-list" id="retrieved-chunks"></div>
       </div>
 
-      <div class="stage" id="stage-prompt">
+      <div class="stage" id="stage-prompt" hidden>
         <h2><span class="step-num">3</span> <span data-i18n="stage3Title">Augmented Prompt</span></h2>
         <p class="explain" data-i18n="stage3Explain">This is the literal text sent to Claude when using RAG: the retrieved chunks as context, plus your question.</p>
         <details class="why-box">
@@ -150,7 +162,7 @@
         <pre id="prompt-text"></pre>
       </div>
 
-      <div class="stage" id="stage-answer">
+      <div class="stage" id="stage-answer" hidden>
         <h2><span class="step-num">4</span> <span data-i18n="stage4Title">Answer</span></h2>
         <p class="explain" data-i18n="stage4Explain">Claude's response. In compare mode, the RAG answer (grounded in your docs) sits next to
           the no-RAG baseline (Claude's general knowledge alone).</p>
@@ -171,11 +183,48 @@
             <div class="answer" id="no-rag-answer-text"></div>
           </div>
         </div>
+        <button type="button" id="try-without-rag-button" data-i18n="tryWithoutRagButton" hidden>See what Claude says without your documents →</button>
       </div>
     </section>
 
-    <div id="error-box" class="error-box" hidden></div>
+    <div id="error-box" class="error-box" hidden>
+      <span id="error-text"></span>
+      <button type="button" id="error-configure-button" data-i18n="errorConfigureButton" hidden>Configure API Key →</button>
+    </div>
   </main>
+
+  <div id="config-modal-overlay" class="modal-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <h2 data-i18n="configModalTitle">Configure LLM provider</h2>
+      <p class="explain" data-i18n="configModalExplain">Pick a provider and paste your API key. This takes effect on your very next question -- no restart needed -- and is saved to <code>.env</code> for next time.</p>
+
+      <label class="modal-label" for="config-provider-select" data-i18n="configProviderLabel">Provider</label>
+      <select id="config-provider-select">
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="openai">OpenAI</option>
+        <option value="nvidia">NVIDIA</option>
+        <option value="ollama">Ollama (local, free)</option>
+      </select>
+
+      <div id="config-key-field">
+        <label class="modal-label" for="config-key-input" data-i18n="configKeyLabel">API key</label>
+        <input type="password" id="config-key-input" autocomplete="off" data-i18n-placeholder="configKeyPlaceholder" placeholder="Paste your key here">
+        <p class="modal-status" id="config-key-status"></p>
+      </div>
+
+      <label class="modal-label" for="config-model-select" data-i18n="configModelLabel">Model</label>
+      <select id="config-model-select"></select>
+      <input type="text" id="config-model-custom-input" autocomplete="off" hidden data-i18n-placeholder="configModelCustomPlaceholder" placeholder="Type the exact model ID">
+      <p class="modal-status" id="config-model-note"></p>
+
+      <p class="modal-status" id="config-modal-message"></p>
+
+      <div class="modal-actions">
+        <button type="button" id="config-cancel-button" data-i18n="configCancelButton">Cancel</button>
+        <button type="button" id="config-save-button" data-i18n="configSaveButton">Save</button>
+      </div>
+    </div>
+  </div>
 
   <footer>
     <p data-i18n-html="footer">Fork this on GitHub and extend it with your AI coding assistant of choice. See <code>docs/EXTENDING.md</code> and <code>docs/LAB_WORKSHEET.md</code> for ideas.</p>

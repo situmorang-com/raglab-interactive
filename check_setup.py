@@ -3,11 +3,12 @@
 Run this before class starts (or have students run it themselves) to
 catch the common setup problems before they turn into 20 raised hands at
 once: missing dependencies, an unset or invalid API key, and a port
-already in use.
+already in use. Validates whichever LLM_PROVIDER is configured in .env
+(anthropic, openai, nvidia, or ollama).
 
 Usage:
     python3 check_setup.py            # checks everything except a live API call
-    python3 check_setup.py --live     # also makes one real (cheap) call to Claude to confirm the key works
+    python3 check_setup.py --live     # also makes one real (cheap) call to the configured LLM to confirm it works
 """
 
 import importlib
@@ -19,7 +20,7 @@ CHECK = "✓"
 CROSS = "✗"
 WARN = "!"
 
-REQUIRED_PACKAGES = ["flask", "sentence_transformers", "numpy", "anthropic", "dotenv"]
+REQUIRED_PACKAGES = ["flask", "sentence_transformers", "numpy", "anthropic", "openai", "dotenv"]
 
 
 def ok(msg: str) -> None:
@@ -71,35 +72,59 @@ def check_dependencies() -> bool:
     return all_ok
 
 
-def check_env_file() -> tuple[bool, str | None]:
+def _parse_env_file() -> dict[str, str]:
+    env_path = Path(__file__).parent / ".env"
+    values = {}
+    if not env_path.exists():
+        return values
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def check_env_file() -> tuple[bool, str, str | None]:
+    """Returns (ok, provider, usable_api_key_or_None)."""
     print(".env file")
     env_path = Path(__file__).parent / ".env"
     if not env_path.exists():
-        fail(".env not found -- run: cp .env.example .env, then add your ANTHROPIC_API_KEY")
-        return False, None
+        fail(".env not found -- run: cp .env.example .env, then add your API key")
+        return False, "anthropic", None
 
     ok(".env exists")
-    key = None
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if line.startswith("ANTHROPIC_API_KEY="):
-            key = line.split("=", 1)[1].strip().strip('"').strip("'")
-            break
+    values = _parse_env_file()
+    provider = values.get("LLM_PROVIDER", "anthropic").lower()
 
-    if not key or key in ("", "your-api-key-here"):
+    from rag.generation import PROVIDERS
+
+    if provider not in PROVIDERS:
+        fail(f"LLM_PROVIDER='{provider}' is not recognized. Valid options: {', '.join(PROVIDERS.keys())}.")
+        return False, provider, None
+    info = PROVIDERS[provider]
+
+    ok(f"LLM_PROVIDER is '{provider}'")
+
+    if not info["key_required"]:
+        ok(f"{provider} doesn't require an API key -- make sure its local server is running.")
+        return True, provider, None
+
+    key = values.get(info["api_key_env"])
+    if not key or key in ("", "your-api-key-here", f"your-{provider}-key"):
         warn(
-            "ANTHROPIC_API_KEY is missing or still the placeholder value. Retrieval/chunking "
-            "will work, but generating answers will fail until you add a real key from "
-            "console.anthropic.com."
+            f"{info['api_key_env']} is missing or still the placeholder value. Retrieval/chunking "
+            f"will work, but generating answers will fail until you add a real key from {info['key_help']}."
         )
-        return True, None
+        return True, provider, None
 
-    if not key.startswith("sk-ant-"):
-        warn(f"ANTHROPIC_API_KEY doesn't look like a real Anthropic key (expected it to start with 'sk-ant-').")
-        return True, key
+    if info["key_prefix"] and not key.startswith(info["key_prefix"]):
+        warn(f"{info['api_key_env']} doesn't look like a real key (expected it to start with '{info['key_prefix']}').")
+        return True, provider, key
 
-    ok("ANTHROPIC_API_KEY is set and looks correctly formatted")
-    return True, key
+    ok(f"{info['api_key_env']} is set and looks correctly formatted")
+    return True, provider, key
 
 
 def check_port_available(port: int = 5000) -> bool:
@@ -118,23 +143,35 @@ def check_port_available(port: int = 5000) -> bool:
     return True  # warning, not a hard failure -- the app will just fail to bind later
 
 
-def check_live_api_call(key: str) -> bool:
+def check_live_api_call(provider: str, key: str | None) -> bool:
     print("Live API call (--live)")
+    from rag.generation import PROVIDERS
+    p = PROVIDERS[provider]
+    values = _parse_env_file()
+    model = values.get(p["model_env"], p["model_default"])
+
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=key)
-        client.messages.create(
-            model="claude-sonnet-5",
-            max_tokens=10,
-            messages=[{"role": "user", "content": "Say 'ok'."}],
-        )
-        ok("Claude API responded successfully -- your key works")
+        if provider == "anthropic":
+            import anthropic
+            client = anthropic.Anthropic(api_key=key)
+            client.messages.create(
+                model=model,
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Say 'ok'."}],
+            )
+        else:
+            import openai
+            base_url = values.get(p["base_url_env"], p["base_url_default"])
+            client = openai.OpenAI(api_key=key or "not-needed", base_url=base_url)
+            client.chat.completions.create(
+                model=model,
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Say 'ok'."}],
+            )
+        ok(f"{provider} responded successfully -- your setup works")
         return True
-    except anthropic.AuthenticationError:
-        fail("Claude rejected the API key (401 invalid x-api-key). Check it against console.anthropic.com.")
-        return False
     except Exception as exc:  # noqa: BLE001 -- this is a diagnostic script, any failure should be reported
-        fail(f"Live API call failed: {exc}")
+        fail(f"Live API call to {provider} failed: {exc}")
         return False
 
 
@@ -147,13 +184,13 @@ def main() -> int:
         check_venv(),
         check_dependencies(),
     ]
-    env_ok, api_key = check_env_file()
+    env_ok, provider, api_key = check_env_file()
     results.append(env_ok)
     results.append(check_port_available())
 
     if live:
-        if api_key:
-            results.append(check_live_api_call(api_key))
+        if api_key or provider == "ollama":
+            results.append(check_live_api_call(provider, api_key))
         else:
             print("Live API call (--live)")
             warn("Skipped -- no usable API key found above.")

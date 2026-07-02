@@ -23,7 +23,8 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# edit .env and add your ANTHROPIC_API_KEY (get one at console.anthropic.com)
+# edit .env and add your API key (default provider is Claude -- see "Choosing an
+# LLM provider" below if you want OpenAI, NVIDIA, or a free local model instead)
 
 python3 check_setup.py           # verifies everything above is actually working
 python3 app.py
@@ -44,6 +45,32 @@ retrieval):
 ```bash
 pytest tests/
 ```
+
+## Choosing an LLM provider
+
+The generation step (`rag/generation.py`) supports four providers, chosen
+via `LLM_PROVIDER` in `.env`. Only the answer-generation step changes —
+chunking, embedding, and retrieval are always local and free regardless
+of which provider you pick.
+
+| `LLM_PROVIDER` | Get a key at | Notes |
+|---|---|---|
+| `anthropic` (default) | [console.anthropic.com](https://console.anthropic.com) | Uses `ANTHROPIC_API_KEY` + `CLAUDE_MODEL` |
+| `openai` | [platform.openai.com](https://platform.openai.com) | Uses `OPENAI_API_KEY` + `OPENAI_MODEL` (default `gpt-4o-mini`) |
+| `nvidia` | [build.nvidia.com](https://build.nvidia.com) | Uses `NVIDIA_API_KEY` + `NVIDIA_MODEL` (default `minimaxai/minimax-m3` — NVIDIA's API Catalog hosts many other open models too, just change the model name) |
+| `ollama` | No key needed — [ollama.com](https://ollama.com) | Free, fully local. Install Ollama, run `ollama serve`, then `ollama pull llama3.2` (or your model of choice) before starting the app |
+
+Only one provider is active at a time. To switch, edit `.env`:
+```bash
+LLM_PROVIDER=nvidia
+NVIDIA_API_KEY=your-nvidia-key
+NVIDIA_MODEL=minimaxai/minimax-m3
+```
+then run `python3 check_setup.py --live` to confirm it works before starting the app.
+
+NVIDIA, OpenAI, and Ollama all share one code path in `rag/generation.py`
+since their APIs are OpenAI-compatible — only Anthropic uses a different
+SDK. See the `PROVIDERS` dict there if you want to add a fifth provider.
 
 ## How RAG works (matches the four panels in the UI)
 

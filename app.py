@@ -19,7 +19,7 @@ from flask import Flask, jsonify, render_template, request
 
 from rag.chunking import chunk_documents
 from rag.embeddings import embed_texts
-from rag.generation import GenerationError, MissingAPIKeyError, generate_answer, generate_plain_answer
+from rag.generation import PROVIDERS, GenerationError, MissingAPIKeyError, generate_answer, generate_plain_answer
 from rag.vector_store import InMemoryVectorStore
 
 load_dotenv()
@@ -91,9 +91,99 @@ def chunks_response() -> dict:
     }
 
 
+def _env_file_path() -> Path:
+    return Path(__file__).parent / ".env"
+
+
+def _write_env_value(key: str, value: str) -> None:
+    """Upsert a single KEY=value line into .env, preserving everything else.
+
+    If the key already exists (commented out or not, e.g. the optional
+    provider blocks in .env.example), that line is replaced in place so
+    configuring a provider through the UI "activates" it the same way
+    manually uncommenting the line would.
+    """
+    path = _env_file_path()
+    lines = path.read_text().splitlines() if path.exists() else []
+    new_line = f"{key}={value}"
+    for i, line in enumerate(lines):
+        stripped = line.strip().lstrip("#").strip()
+        if stripped.startswith(f"{key}="):
+            lines[i] = new_line
+            break
+    else:
+        lines.append(new_line)
+    path.write_text("\n".join(lines) + "\n")
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/config")
+def api_config_get():
+    """Reports which provider is active and whether it has a key configured.
+
+    Never returns the key itself -- only a boolean -- even though this is a
+    local single-student app, echoing a secret back once it's been entered
+    is needless exposure.
+    """
+    provider = os.environ.get("LLM_PROVIDER", "anthropic").lower()
+    if provider not in PROVIDERS:
+        provider = "anthropic"
+    config = PROVIDERS[provider]
+    key_configured = bool(os.environ.get(config["api_key_env"])) if config["key_required"] else True
+    return jsonify({
+        "provider": provider,
+        "key_required": config["key_required"],
+        "key_configured": key_configured,
+        "model": os.environ.get(config["model_env"], config["model_default"]),
+        # Every provider's static metadata, so the frontend can build the
+        # picker/placeholders without duplicating these defaults in JS.
+        "all_providers": {
+            name: {
+                "key_required": p["key_required"],
+                "model_default": p["model_default"],
+                "model_choices": p["model_choices"],
+            }
+            for name, p in PROVIDERS.items()
+        },
+    })
+
+
+@app.route("/api/config", methods=["POST"])
+def api_config_set():
+    """Sets the active provider/key/model for this run *and* persists it to
+    .env so it survives a restart -- the next query picks it up immediately
+    since rag/generation.py reads os.environ at call time, not just at
+    startup.
+    """
+    body = request.get_json(silent=True) or {}
+    provider = (body.get("provider") or "").strip().lower()
+    api_key = (body.get("api_key") or "").strip()
+    model = (body.get("model") or "").strip()
+
+    if provider not in PROVIDERS:
+        return jsonify({"error": f"Unknown provider '{provider}'. Valid options: {', '.join(PROVIDERS.keys())}."}), 400
+
+    config = PROVIDERS[provider]
+    already_has_key = bool(os.environ.get(config["api_key_env"]))
+    if config["key_required"] and not api_key and not already_has_key:
+        return jsonify({"error": f"Please provide an API key for {provider}."}), 400
+
+    os.environ["LLM_PROVIDER"] = provider
+    _write_env_value("LLM_PROVIDER", provider)
+
+    if api_key:
+        os.environ[config["api_key_env"]] = api_key
+        _write_env_value(config["api_key_env"], api_key)
+
+    if model:
+        os.environ[config["model_env"]] = model
+        _write_env_value(config["model_env"], model)
+
+    return jsonify({"ok": True, "provider": provider})
 
 
 @app.route("/api/chunks")
@@ -186,16 +276,22 @@ def api_query():
     if compare or use_rag:
         try:
             prompt_sent, answer = generate_answer(query, scored_chunks)
-            rag_result = {"prompt_sent": prompt_sent, "answer": answer, "error": None}
+            rag_result = {"prompt_sent": prompt_sent, "answer": answer, "error": None, "needs_config": False}
         except (MissingAPIKeyError, GenerationError) as exc:
-            rag_result = {"prompt_sent": None, "answer": None, "error": str(exc)}
+            rag_result = {
+                "prompt_sent": None, "answer": None, "error": str(exc),
+                "needs_config": isinstance(exc, MissingAPIKeyError),
+            }
 
     if compare or not use_rag:
         try:
             answer = generate_plain_answer(query)
-            no_rag_result = {"answer": answer, "error": None}
+            no_rag_result = {"answer": answer, "error": None, "needs_config": False}
         except (MissingAPIKeyError, GenerationError) as exc:
-            no_rag_result = {"answer": None, "error": str(exc)}
+            no_rag_result = {
+                "answer": None, "error": str(exc),
+                "needs_config": isinstance(exc, MissingAPIKeyError),
+            }
 
     return jsonify({
         "query": query,

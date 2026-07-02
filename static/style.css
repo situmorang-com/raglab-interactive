@@ -13,6 +13,18 @@
 
 * { box-sizing: border-box; }
 
+/* This whole app toggles visibility via the HTML `hidden` attribute (JS
+   sets el.hidden = true/false throughout), but several components also set
+   their own `display` property (flex/grid) for layout. An author rule's
+   `display` always beats the browser's default `[hidden] { display: none }`
+   at equal specificity, regardless of source order -- so without this,
+   any component with its own `display` silently stops respecting `hidden`
+   entirely. One global override here prevents that bug for every element,
+   present and future, instead of needing an [hidden] exception per class. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -84,6 +96,60 @@ main {
 .panel h2 {
   margin: 0 0 0.75rem;
   font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.intro-card {
+  border-color: var(--accent-dim);
+  background: linear-gradient(160deg, var(--panel), #1a2036);
+}
+
+.intro-card p {
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+
+#guided-run-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #0f1117;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#toggle-controls-button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.controls-body {
+  margin-top: 0.25rem;
+}
+
+#try-without-rag-button {
+  margin-top: 1rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .controls-grid {
@@ -266,6 +332,17 @@ main {
   margin: 0.5rem 0 0;
 }
 
+.link-button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0.5rem;
+}
+
 .pipeline {
   display: flex;
   flex-direction: column;
@@ -370,29 +447,54 @@ main {
 .score-weak { color: var(--weak); }
 
 .vec-bars {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 28px;
+  gap: 3px;
+  height: 40px;
   margin-top: 0.5rem;
   padding: 0 0.1rem;
 }
 
-.vec-bar {
+.vec-bars::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--border);
+}
+
+.vec-bar-slot {
+  position: relative;
   flex: 1;
-  min-width: 3px;
+  min-width: 4px;
+  height: 100%;
+}
+
+.vec-bar-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
   border-radius: 1px;
-  align-self: center;
 }
 
 .vec-bar-pos {
+  bottom: 50%;
   background: var(--accent);
-  align-self: flex-end;
 }
 
 .vec-bar-neg {
+  top: 50%;
   background: var(--weak);
-  align-self: flex-start;
+}
+
+.vec-numbers {
+  margin-top: 0.3rem;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  word-break: break-all;
 }
 
 .query-vector-panel {
@@ -482,6 +584,114 @@ pre#prompt-text {
   color: #ffb4bd;
   border-radius: 8px;
   padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+#error-configure-button {
+  flex-shrink: 0;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #7a3540;
+  border-radius: 6px;
+  background: transparent;
+  color: #ffb4bd;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.modal-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.modal-card .explain {
+  margin: 0 0 1.25rem;
+}
+
+.modal-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.9rem 0 0.3rem;
+}
+
+#config-provider-select,
+#config-key-input,
+#config-model-select,
+#config-model-custom-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #11141d;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+#config-model-custom-input {
+  margin-top: 0.5rem;
+}
+
+.modal-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+  min-height: 1.1em;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+#config-cancel-button {
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#config-save-button {
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #0f1117;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 footer {

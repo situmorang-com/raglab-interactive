@@ -33,6 +33,16 @@ Handoff → turn off "AirPlay Receiver"). Otherwise, find and stop whatever
 else is using the port, or edit the last line of `app.py` to use a
 different port (e.g. `app.run(debug=True, port=5050)`).
 
+**A sneakier variant**: your browser console shows a `403 Forbidden` for
+some resource, but that request *never appears in your Flask terminal log
+at all*. This means AirPlay Receiver is bound to port 5000 on `*` (all
+interfaces, including IPv6), while Flask only binds IPv4 `127.0.0.1`. If
+the browser resolves `localhost` to the IPv6 loopback (`::1`) for a given
+request, it silently lands on AirPlay Receiver instead of Flask, which
+responds `403` for paths it doesn't recognize. Fix: either turn off
+AirPlay Receiver (above), or open the app via `http://127.0.0.1:5000`
+instead of `http://localhost:5000` to force IPv4 and bypass it entirely.
+
 ## "Could not reach the server. Is app.py running?" in the browser
 
 This message means the browser's request to the backend failed
@@ -51,6 +61,27 @@ Your `.env` has a key, but Anthropic is rejecting it. Check:
 
 Run `python3 check_setup.py --live` to test the key with one real, cheap
 API call and get a definitive yes/no answer.
+
+## Using NVIDIA, OpenAI, or Ollama instead of Claude
+
+Set `LLM_PROVIDER` in `.env` (see the README's "Choosing an LLM provider"
+section) and run `python3 check_setup.py --live` to confirm your setup
+before starting the app. Provider-specific issues:
+
+- **NVIDIA (`401`/authentication errors)**: double-check `NVIDIA_API_KEY`
+  against [build.nvidia.com](https://build.nvidia.com), and that
+  `NVIDIA_MODEL` is spelled exactly as listed on the API Catalog page for
+  that model (e.g. `minimaxai/minimax-m3`, lowercase, with the `org/`
+  prefix).
+- **Ollama ("Could not reach Ollama at ...")**: this means the local
+  Ollama server isn't running or the model hasn't been downloaded yet.
+  Run `ollama serve` in a separate terminal, and `ollama pull llama3.2`
+  (or whichever model you set in `OLLAMA_MODEL`) before starting the app.
+  Ollama doesn't need an API key at all — leave `OLLAMA_API_KEY` unset.
+- **OpenAI (`401`)**: check `OPENAI_API_KEY` against
+  [platform.openai.com](https://platform.openai.com), and that your
+  account has billing set up (OpenAI's API isn't usable on a bare signup
+  with no payment method attached).
 
 ## The language toggle (EN/ID) doesn't do anything when clicked
 

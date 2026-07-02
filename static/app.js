@@ -78,6 +78,32 @@ const TRANSLATIONS = {
     thresholdTip: "If the best-matching chunk scores below this number, you'll see a warning banner. This doesn't change what gets retrieved -- only whether you're warned the answer might be unreliable.",
     useRagTip: "When checked, the system retrieves relevant chunks before answering. Uncheck it to see what Claude says using only its general training -- no access to your documents at all.",
     compareTip: "Runs both the grounded (RAG) answer and the ungrounded baseline side by side for the same question, so you can see the difference directly instead of taking it on faith.",
+    introTitle: "What is RAG?",
+    introBody: "Retrieval-Augmented Generation (RAG) lets an AI answer questions using your own documents instead of guessing from general training. Below is a real company handbook. Click below to watch one question flow through all four steps -- chunking, embedding, retrieval, and generation -- and see the answer with and without RAG side by side.",
+    guidedRunButton: "Run the demo →",
+    showControlsLabel: "▸ Show pipeline controls",
+    hideControlsLabel: "▾ Hide pipeline controls",
+    tryWithoutRagButton: "See what Claude says without your documents →",
+    openConfigButton: "⚙ Configure API key",
+    errorConfigureButton: "Configure API Key →",
+    configModalTitle: "Configure LLM provider",
+    configModalExplain: "Pick a provider and paste your API key. This takes effect on your very next question -- no restart needed -- and is saved to .env for next time.",
+    configProviderLabel: "Provider",
+    configKeyLabel: "API key",
+    configKeyPlaceholder: "Paste your key here",
+    configModelLabel: "Model (optional)",
+    configCancelButton: "Cancel",
+    configSaveButton: "Save",
+    configKeyAlreadySet: "A key is already configured for this provider ✓",
+    configKeyNotSet: "No key configured yet for this provider.",
+    configNoKeyNeeded: "This provider doesn't need an API key -- just make sure its local server is running.",
+    configSaving: "Saving...",
+    configSaved: "Saved! Your next question will use this provider.",
+    configSaveFailed: "Could not save this configuration.",
+    configMissingKey: "Please paste an API key.",
+    configCustomModelOption: "Custom...",
+    configModelCustomPlaceholder: "Type the exact model ID",
+    configOllamaModelNote: "These are common local models -- pick Custom if you pulled a different one with `ollama pull <name>`.",
   },
   id: {
     subtitle: "Jangan hanya menonton RAG bekerja — ubah pengaturannya dan lihat sendiri kenapa itu penting.",
@@ -152,6 +178,32 @@ const TRANSLATIONS = {
     thresholdTip: "Jika chunk dengan skor tertinggi berada di bawah angka ini, kamu akan melihat banner peringatan. Ini tidak mengubah apa yang diambil — hanya mengubah apakah kamu diperingatkan bahwa jawabannya mungkin tidak bisa diandalkan.",
     useRagTip: "Saat dicentang, sistem akan mengambil chunk yang relevan sebelum menjawab. Hilangkan centangnya untuk melihat jawaban Claude hanya dari pengetahuan umumnya — tanpa akses ke dokumenmu sama sekali.",
     compareTip: "Menjalankan jawaban RAG (berlandaskan dokumen) dan jawaban tanpa-RAG (baseline) berdampingan untuk pertanyaan yang sama, jadi kamu bisa melihat langsung perbedaannya, bukan hanya percaya begitu saja.",
+    introTitle: "Apa itu RAG?",
+    introBody: "Retrieval-Augmented Generation (RAG) memungkinkan AI menjawab pertanyaan menggunakan dokumenmu sendiri, bukan menebak dari pengetahuan umum. Di bawah ini ada buku pedoman perusahaan yang nyata. Klik tombol di bawah untuk melihat satu pertanyaan mengalir melalui keempat tahap — chunking, embedding, retrieval, dan generation — dan lihat jawabannya dengan dan tanpa RAG secara berdampingan.",
+    guidedRunButton: "Jalankan demo →",
+    showControlsLabel: "▸ Tampilkan kontrol pipeline",
+    hideControlsLabel: "▾ Sembunyikan kontrol pipeline",
+    tryWithoutRagButton: "Lihat jawaban Claude tanpa dokumenmu →",
+    openConfigButton: "⚙ Atur kunci API",
+    errorConfigureButton: "Atur Kunci API →",
+    configModalTitle: "Atur penyedia LLM",
+    configModalExplain: "Pilih penyedia dan tempel kunci API-mu. Ini langsung berlaku untuk pertanyaan berikutnya -- tanpa perlu restart -- dan disimpan ke .env untuk lain kali.",
+    configProviderLabel: "Penyedia",
+    configKeyLabel: "Kunci API",
+    configKeyPlaceholder: "Tempel kuncimu di sini",
+    configModelLabel: "Model (opsional)",
+    configCancelButton: "Batal",
+    configSaveButton: "Simpan",
+    configKeyAlreadySet: "Kunci sudah dikonfigurasi untuk penyedia ini ✓",
+    configKeyNotSet: "Belum ada kunci untuk penyedia ini.",
+    configNoKeyNeeded: "Penyedia ini tidak butuh kunci API -- pastikan saja server lokalnya berjalan.",
+    configSaving: "Menyimpan...",
+    configSaved: "Tersimpan! Pertanyaan berikutnya akan pakai penyedia ini.",
+    configSaveFailed: "Gagal menyimpan konfigurasi ini.",
+    configMissingKey: "Silakan tempel kunci API.",
+    configCustomModelOption: "Kustom...",
+    configModelCustomPlaceholder: "Ketik ID model yang persis",
+    configOllamaModelNote: "Ini adalah model lokal yang umum -- pilih Kustom jika kamu menarik model lain dengan `ollama pull <nama>`.",
   },
 };
 
@@ -231,7 +283,39 @@ const queryVectorNoteEl = document.getElementById("query-vector-note");
 const tooltipPopup = document.getElementById("tooltip-popup");
 const tooltipTextEl = document.getElementById("tooltip-text");
 
+const errorTextEl = document.getElementById("error-text");
+const errorConfigureButton = document.getElementById("error-configure-button");
+const openConfigButton = document.getElementById("open-config-button");
+
+const configModalOverlay = document.getElementById("config-modal-overlay");
+const configProviderSelect = document.getElementById("config-provider-select");
+const configKeyField = document.getElementById("config-key-field");
+const configKeyInput = document.getElementById("config-key-input");
+const configKeyStatus = document.getElementById("config-key-status");
+const configModelSelect = document.getElementById("config-model-select");
+const configModelCustomInput = document.getElementById("config-model-custom-input");
+const configModelNote = document.getElementById("config-model-note");
+const configModalMessage = document.getElementById("config-modal-message");
+const configCancelButton = document.getElementById("config-cancel-button");
+const configSaveButton = document.getElementById("config-save-button");
+
+const introCard = document.getElementById("intro-card");
+const guidedRunButton = document.getElementById("guided-run-button");
+const controlsBody = document.getElementById("controls-body");
+const toggleControlsButton = document.getElementById("toggle-controls-button");
+const tryWithoutRagButton = document.getElementById("try-without-rag-button");
+
+const stageChunking = document.getElementById("stage-chunking");
+const stageEmbedding = document.getElementById("stage-embedding");
+const stagePrompt = document.getElementById("stage-prompt");
+const stageAnswer = document.getElementById("stage-answer");
+const STAGE_ELEMENTS = [stageChunking, stageEmbedding, stagePrompt, stageAnswer];
+
+const GUIDED_EXAMPLE_QUERY = "What is the company's vacation policy?";
+
 let allChunks = []; // cached for plotting against the latest retrieval/query point
+let hasRunOnce = localStorage.getItem("ragLabHasRun") === "1";
+let lastQuery = "";
 
 // --- info tooltips on the pipeline controls ---------------------------------
 // Click a "?" badge to see a short, plain-language explanation of that
@@ -279,7 +363,153 @@ if (localStorage.getItem("ragLabTooltipsSeen")) {
 tooltipPopup.addEventListener("click", (event) => event.stopPropagation());
 document.addEventListener("click", closeTooltip);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeTooltip();
+  if (event.key === "Escape") {
+    closeTooltip();
+    closeConfigModal();
+  }
+});
+
+// --- API key configuration modal --------------------------------------------
+// Lets a student pick a provider and paste a key without touching .env or
+// restarting the server -- rag/generation.py reads os.environ at call
+// time, so the very next query picks up whatever was just saved here.
+
+let allProvidersInfo = {};
+let pendingConfigRetry = false; // true when the modal was opened from a real error, to offer a re-run on save
+const CUSTOM_MODEL_VALUE = "__custom__";
+
+// Populates the model <select> with that provider's known model IDs plus a
+// "Custom..." option. Selecting a known ID avoids the exact bug that
+// prompted this feature: a student typing a display name (e.g. "GPT Mini")
+// instead of a real API model ID ("gpt-4o-mini") and getting a cryptic
+// "invalid model" error from the provider.
+function populateModelSelect(provider, currentModel) {
+  const info = allProvidersInfo[provider];
+  if (!info) return;
+
+  configModelSelect.innerHTML = "";
+  info.model_choices.forEach((modelId) => {
+    const option = document.createElement("option");
+    option.value = modelId;
+    option.textContent = modelId;
+    configModelSelect.appendChild(option);
+  });
+  const customOption = document.createElement("option");
+  customOption.value = CUSTOM_MODEL_VALUE;
+  customOption.textContent = t("configCustomModelOption");
+  configModelSelect.appendChild(customOption);
+
+  if (currentModel && info.model_choices.includes(currentModel)) {
+    configModelSelect.value = currentModel;
+    configModelCustomInput.hidden = true;
+    configModelCustomInput.value = "";
+  } else if (currentModel) {
+    configModelSelect.value = CUSTOM_MODEL_VALUE;
+    configModelCustomInput.hidden = false;
+    configModelCustomInput.value = currentModel;
+  } else {
+    configModelSelect.value = info.model_default;
+    configModelCustomInput.hidden = true;
+    configModelCustomInput.value = "";
+  }
+  configModelNote.textContent = provider === "ollama" ? t("configOllamaModelNote") : "";
+}
+
+configModelSelect.addEventListener("change", () => {
+  configModelCustomInput.hidden = configModelSelect.value !== CUSTOM_MODEL_VALUE;
+});
+
+function updateConfigFieldsForProvider(provider, keyConfigured, currentModel) {
+  const info = allProvidersInfo[provider];
+  if (!info) return;
+  configKeyField.hidden = !info.key_required;
+  populateModelSelect(provider, currentModel);
+  if (!info.key_required) {
+    configKeyStatus.textContent = t("configNoKeyNeeded");
+  } else if (keyConfigured === true) {
+    configKeyStatus.textContent = t("configKeyAlreadySet");
+  } else if (keyConfigured === false) {
+    configKeyStatus.textContent = t("configKeyNotSet");
+  } else {
+    configKeyStatus.textContent = "";
+  }
+}
+
+async function openConfigModal(fromError = false) {
+  pendingConfigRetry = fromError;
+  configModalMessage.textContent = "";
+  configKeyInput.value = "";
+  configModalOverlay.hidden = false;
+  try {
+    const res = await fetch("/api/config");
+    const data = await res.json();
+    allProvidersInfo = data.all_providers || {};
+    configProviderSelect.value = data.provider;
+    updateConfigFieldsForProvider(data.provider, data.key_configured, data.model);
+  } catch (err) {
+    configModalMessage.textContent = t("errUnreachable");
+  }
+}
+
+function closeConfigModal() {
+  configModalOverlay.hidden = true;
+}
+
+openConfigButton.addEventListener("click", () => openConfigModal(false));
+errorConfigureButton.addEventListener("click", () => openConfigModal(true));
+configCancelButton.addEventListener("click", closeConfigModal);
+configModalOverlay.addEventListener("click", (event) => {
+  if (event.target === configModalOverlay) closeConfigModal();
+});
+
+configProviderSelect.addEventListener("change", () => {
+  updateConfigFieldsForProvider(configProviderSelect.value, undefined, undefined);
+});
+
+configSaveButton.addEventListener("click", async () => {
+  const provider = configProviderSelect.value;
+  const info = allProvidersInfo[provider];
+  const apiKey = configKeyInput.value.trim();
+  const model = configModelSelect.value === CUSTOM_MODEL_VALUE
+    ? configModelCustomInput.value.trim()
+    : configModelSelect.value;
+
+  if (info && info.key_required && !apiKey) {
+    configModalMessage.textContent = t("configMissingKey");
+    return;
+  }
+
+  configSaveButton.disabled = true;
+  configSaveButton.textContent = t("configSaving");
+  configModalMessage.textContent = "";
+
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider,
+        api_key: apiKey,
+        model,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      configModalMessage.textContent = data.error || t("configSaveFailed");
+      return;
+    }
+    configModalMessage.textContent = t("configSaved");
+    const shouldRetry = pendingConfigRetry && lastQuery;
+    setTimeout(() => {
+      closeConfigModal();
+      if (shouldRetry) runQuery({ query: lastQuery });
+    }, 900);
+  } catch (err) {
+    configModalMessage.textContent = t("errUnreachable");
+  } finally {
+    configSaveButton.disabled = false;
+    configSaveButton.textContent = t("configSaveButton");
+  }
 });
 
 // --- helpers ---------------------------------------------------------------
@@ -292,22 +522,38 @@ function scoreTier(score) {
 }
 
 // Renders a small row of signed bars from a slice of a real embedding
-// vector -- positive values grow up in accent color, negative values grow
-// down in the "weak" red, so similarly-shaped chunks are visually
-// scannable next to the query's own bars.
+// vector -- positive values grow up from a shared zero-line in accent
+// color, negative values grow down in "weak" red, so similarly-shaped
+// chunks are visually scannable next to the query's own bars. The actual
+// numbers are also printed below, since a bar chart alone doesn't answer
+// "is that supposed to be numbers?" -- it should look like numbers too.
 function renderVectorBars(values) {
   const wrap = document.createElement("div");
   wrap.className = "vec-bars";
+
   const scale = 0.3; // typical MiniLM component magnitude; values beyond this just cap at full height
   values.forEach((v) => {
-    const bar = document.createElement("span");
-    bar.className = "vec-bar " + (v >= 0 ? "vec-bar-pos" : "vec-bar-neg");
-    const heightPct = Math.min(Math.abs(v) / scale, 1) * 100;
-    bar.style.height = heightPct + "%";
-    bar.title = v.toFixed(4);
-    wrap.appendChild(bar);
+    const slot = document.createElement("span");
+    slot.className = "vec-bar-slot";
+    const fill = document.createElement("span");
+    fill.className = "vec-bar-fill " + (v >= 0 ? "vec-bar-pos" : "vec-bar-neg");
+    // Height is a % of the whole slot, capped at 50% since a bar can only
+    // reach from the center line to one edge (up for positive, down for negative).
+    const heightPct = Math.min(Math.abs(v) / scale, 1) * 50;
+    fill.style.height = heightPct + "%";
+    fill.title = v.toFixed(4);
+    slot.appendChild(fill);
+    wrap.appendChild(slot);
   });
-  return wrap;
+
+  const numbers = document.createElement("div");
+  numbers.className = "vec-numbers";
+  numbers.textContent = values.map((v) => v.toFixed(3)).join("  ");
+
+  const container = document.createElement("div");
+  container.appendChild(wrap);
+  container.appendChild(numbers);
+  return container;
 }
 
 function renderChunkItem({ source, index, text, score, vector_preview }) {
@@ -330,14 +576,16 @@ function renderChunkItem({ source, index, text, score, vector_preview }) {
   return div;
 }
 
-function showError(message) {
-  errorBox.textContent = message;
+function showError(message, needsConfig = false) {
+  errorTextEl.textContent = message;
+  errorConfigureButton.hidden = !needsConfig;
   errorBox.hidden = false;
 }
 
 function hideError() {
   errorBox.hidden = true;
-  errorBox.textContent = "";
+  errorTextEl.textContent = "";
+  errorConfigureButton.hidden = true;
 }
 
 // --- embedding plot (plain SVG, no charting library) -----------------------
@@ -489,6 +737,54 @@ addDocButton.addEventListener("click", async () => {
   }
 });
 
+// --- guided first run & sequential stage reveal -----------------------------
+// The four pipeline stages are hidden by default (see index.html) so that
+// on every run -- guided or free exploration -- they reveal one at a time,
+// reinforcing that RAG is a pipeline, not a single black-box step.
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function revealStagesSequentially() {
+  for (const el of STAGE_ELEMENTS) {
+    el.hidden = false;
+    if (typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    await delay(550);
+  }
+}
+
+// First successful run (guided or manual) permanently ends onboarding for
+// this browser: the intro card disappears and the controls panel becomes
+// available, via the same localStorage-gated pattern already used for the
+// language preference and tooltip-pulse state.
+function markFirstRunComplete() {
+  if (hasRunOnce) return;
+  hasRunOnce = true;
+  localStorage.setItem("ragLabHasRun", "1");
+  introCard.hidden = true;
+  controlsBody.hidden = false;
+  toggleControlsButton.dataset.i18n = "hideControlsLabel";
+  toggleControlsButton.textContent = t("hideControlsLabel");
+}
+
+toggleControlsButton.addEventListener("click", () => {
+  controlsBody.hidden = !controlsBody.hidden;
+  const key = controlsBody.hidden ? "showControlsLabel" : "hideControlsLabel";
+  toggleControlsButton.dataset.i18n = key;
+  toggleControlsButton.textContent = t(key);
+});
+
+guidedRunButton.addEventListener("click", () => {
+  runQuery({ query: GUIDED_EXAMPLE_QUERY, compare: true });
+});
+
+tryWithoutRagButton.addEventListener("click", () => {
+  runQuery({ query: lastQuery, compare: true });
+});
+
 // --- asking a question -------------------------------------------------------
 
 function renderAnswerColumn(col, textEl, result) {
@@ -499,20 +795,25 @@ function renderAnswerColumn(col, textEl, result) {
   col.hidden = false;
   if (result.error) {
     textEl.textContent = "";
-    showError(result.error);
+    showError(result.error, result.needs_config);
   } else {
     textEl.textContent = result.answer;
   }
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const query = input.value.trim();
+// overrides.query / overrides.compare let the guided-run and "try without
+// RAG" buttons trigger the same flow as the form, without duplicating it.
+async function runQuery(overrides = {}) {
+  const query = (overrides.query !== undefined ? overrides.query : input.value).trim();
   if (!query) return;
+  input.value = query;
+  lastQuery = query;
+  const useCompare = overrides.compare !== undefined ? overrides.compare : compareCheckbox.checked;
 
   hideError();
   askButton.disabled = true;
   askButton.textContent = t("thinkingButton");
+  STAGE_ELEMENTS.forEach((el) => { el.hidden = true; });
 
   try {
     const res = await fetch("/api/query", {
@@ -522,12 +823,13 @@ form.addEventListener("submit", async (event) => {
         query,
         top_k: parseInt(topkInput.value, 10),
         use_rag: useRagCheckbox.checked,
-        compare: compareCheckbox.checked,
+        compare: useCompare,
       }),
     });
     const data = await res.json();
 
     pipeline.hidden = false;
+    markFirstRunComplete();
 
     const retrieved = data.retrieved_chunks || [];
     retrievedChunksEl.innerHTML = "";
@@ -556,19 +858,40 @@ form.addEventListener("submit", async (event) => {
 
     if (!res.ok) {
       showError(data.error || t("errGeneric"));
-      return;
+    } else {
+      promptTextEl.textContent = data.rag ? (data.rag.prompt_sent || "") : "";
+      renderAnswerColumn(ragCol, ragAnswerEl, data.rag);
+      renderAnswerColumn(noRagCol, noRagAnswerEl, data.no_rag);
+      // Offer the with/without-RAG contrast whenever this run wasn't already a compare run.
+      tryWithoutRagButton.hidden = !(data.rag && !data.no_rag);
     }
 
-    promptTextEl.textContent = data.rag ? (data.rag.prompt_sent || "") : "";
-    renderAnswerColumn(ragCol, ragAnswerEl, data.rag);
-    renderAnswerColumn(noRagCol, noRagAnswerEl, data.no_rag);
+    await revealStagesSequentially();
   } catch (err) {
     showError(t("errUnreachable"));
   } finally {
     askButton.disabled = false;
     askButton.textContent = t("askButton");
   }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  runQuery();
 });
+
+// Initial page state: first-time visitors see the intro card with controls
+// collapsed; returning visitors (per localStorage) skip straight to the
+// sandbox with controls already expanded.
+if (hasRunOnce) {
+  introCard.hidden = true;
+  controlsBody.hidden = false;
+  toggleControlsButton.dataset.i18n = "hideControlsLabel";
+} else {
+  introCard.hidden = false;
+  controlsBody.hidden = true;
+  toggleControlsButton.dataset.i18n = "showControlsLabel";
+}
 
 applyLanguage(currentLang);
 loadAllChunks();
